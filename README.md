@@ -60,4 +60,4 @@ Each substep:
 
 ## License
 
-MIT
+Released under the [MIT License](LICENSE).
