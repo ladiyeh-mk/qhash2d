@@ -1,63 +1,125 @@
+
 # qhash2d
-
-A real-time 2D particle simulation written in C with [raylib](https://www.raylib.com/). It uses Verlet integration and substepping for stable motion, and a regular grid spatial partition so each particle only checks collisions against its nearby neighbors instead of every other particle.
-
+ 
+A real-time 2D particle simulation written in C using [raylib](https://www.raylib.com/).
+ 
+The simulation uses **Verlet integration** with physics substepping for particle movement, and a **uniform grid spatial partitioning system** to efficiently detect and resolve particle collisions.
+ 
 ## Features
-
-- **Verlet integration**: velocity is implicit (`current_pos - previous_pos`), which keeps the integrator simple and stable.
-- **Substepping**: each frame is split into several smaller steps to prevent tunneling and keep stacks stiff.
-- **Regular grid broad-phase**: particles are bucketed into a uniform grid, and collisions are only tested against the 3x3 neighboring cells.
-- **Position-based collision resolution**, weighted by inverse mass.
-- **Wall collisions** with configurable restitution and friction.
-
+ 
+- **Verlet integration**: computes particle motion using current and previous positions, with acceleration applied over time.
+- **Physics substepping**: divides each frame into smaller simulation steps for more stable collision handling.
+- **Uniform grid spatial partitioning**: organizes particles into grid cells, reducing unnecessary collision checks by restricting detection to nearby cells.
+- **Position-based collision resolution**: resolves overlapping particles by correcting their positions along the collision normal.
+- **Wall constraints**: handles screen boundaries with configurable restitution and friction.
+- **Random particle spawning**: generates particles at random positions with configurable initial velocity, acceleration, radius, and color.
+- **Grid debug overlay**: optionally displays grid boundaries and the number of particles occupying each cell.
 ## Project structure
-
+ 
 ```
-src/main.c               simulation loop and setup
-include/particle.h       particles, dynamic array, integration, wall bounds
-include/regular_grid.h   grid cells, population, collision solver
+qhash2d/
+├── main.c
+├── include/
+│   ├── particle/
+│   │   └── particle.h
+│   └── uniform_grid/
+│       └── uniform_grid.h
+├── src/
+│   ├── particle/
+│   │   └── particle.c
+│   └── uniform_grid/
+│       └── uniform_grid.c
+└── bin/
 ```
-
-Both headers are single-file style: define `PARTICLE_IMPLEMENTATION` and `REGULAR_GRID_IMPLEMENTATION` in exactly one source file before including them.
-
+ 
+## Dependencies
+ 
+* [raylib](https://www.raylib.com/) — graphics and window management.
+* [ladlib](https://github.com/ladiyeh-mk/ladlib) — custom C library providing generic data structures, including dynamic arrays.
 ## Build and run
-
-Requires raylib to be installed.
-
+ 
+Make sure raylib is installed. `ladlib` is a project dependency and is currently under development.
+ 
 ```bash
 mkdir -p bin
-gcc -o bin/main src/main.c -lraylib -lm && ./bin/main
+ 
+gcc -o bin/main \
+    main.c \
+    src/particle/particle.c \
+    src/uniform_grid/uniform_grid.c \
+    -Iinclude \
+    -lraylib -lm -lladlib
+ 
+./bin/main
 ```
-
+ 
 ## Controls
-
-| Key     | Action                |
-|---------|-----------------------|
-| `SPACE` | Spawn 20 particles    |
-
-## Tuning
-
-Parameters in `main.c`:
-
-| Name        | Meaning                                              |
-|-------------|------------------------------------------------------|
-| `SUB_STEPS` | Physics steps per frame (more = more stable)         |
-| `grid_size` | Cell size in px, keep it >= 2 * particle radius      |
-| `radius`    | Particle radius                                      |
-| `gravity`   | Downward acceleration                                |
-| `res`       | Wall restitution (bounciness)                        |
-| `fric`      | Wall friction                                        |
-
-## How it works
-
-Each substep:
-
-1. Integrate: `next = 2*current - previous + acc * dt^2`
-2. Rebuild the grid from particle positions
-3. For each particle, test the particles in the 3x3 neighboring cells
-4. For overlapping pairs, push them apart along the contact normal, weighted by inverse mass
-5. Clamp particles inside the window
-
+ 
+| Key     | Action              |
+| ------- | ------------------- |
+| `SPACE` | Spawn 50 particles  |
+| `C`     | Clear all particles |
+ 
+## Configuration
+ 
+The following constants in `main.c` control the simulation:
+ 
+| Constant        | Description                  | Default |
+| --------------- | ---------------------------- | ------- |
+| `SCREEN_WIDTH`  | Window width in pixels       | `800`   |
+| `SCREEN_HEIGHT` | Window height in pixels      | `600`   |
+| `FPS`           | Target frame rate            | `60`    |
+| `SUB_STEPS`     | Physics substeps per frame   | `12`    |
+| `RADIUS`        | Particle radius              | `10`    |
+| `CELL_SIZE`     | Uniform grid cell size       | `100`   |
+| `FRICTION`      | Wall friction coefficient    | `0.1`   |
+| `RESTITUTION`   | Wall restitution coefficient | `0.8`   |
+ 
+Particles are spawned without acceleration by default. To introduce gravity, pass a downward acceleration vector to `particle_spawn_random`, for example:
+ 
+```c
+(Vector2) { 0, 1000 }
+```
+ 
+## Grid debug overlay
+ 
+The uniform grid includes an optional debug logger that displays cell boundaries and particle counts.
+ 
+Enable it by defining `UNIFORMGRID_LOGGER` before including the header:
+ 
+```c
+#define UNIFORMGRID_LOGGER
+#include "include/uniform_grid/uniform_grid.h"
+```
+ 
+Then call the logger inside the drawing loop:
+ 
+```c
+BeginDrawing();
+ 
+    ClearBackground(BLACK);
+ 
+    particle_draw(particles);
+    uniformgrid_glogger(grid);
+ 
+EndDrawing();
+```
+ 
+## Simulation loop
+ 
+Each frame is divided into multiple physics substeps. Each substep performs the following operations:
+ 
+1. **Integrate particles** using Verlet integration:
+```
+next = 2 * current - previous + acc * dt^2
+```
+2. **Clear the uniform grid** to remove the previous substep's particle assignments.
+3. **Populate the grid** by assigning particles to their corresponding cells.
+4. **Resolve collisions** by checking particles in neighboring grid cells and correcting overlapping positions.
+5. **Apply wall constraints** to keep particles inside the simulation boundaries, accounting for restitution and friction.
+This approach avoids checking every particle against every other particle, making collision detection more efficient as the particle count increases.
+ 
 ## License
-
-Released under the [MIT License](LICENSE).
+ 
+Released under the MIT License.
+ 
