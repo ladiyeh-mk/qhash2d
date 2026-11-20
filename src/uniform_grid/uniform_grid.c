@@ -94,7 +94,7 @@ void uniformgrid_destroy(UniformGrid *grid) {
     free(grid);
 }
 
-void uniformgrid_resolve_collisions(UniformGrid *grid, Particle *particles, float restitution, float percent) {
+void uniformgrid_resolve_collisions(UniformGrid *grid, Particle *particles) {
     if (!grid || !particles) { return; }
 
     size_t particles_count = array_count(particles);
