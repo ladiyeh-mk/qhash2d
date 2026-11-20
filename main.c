@@ -1,67 +1,70 @@
+#include <stdio.h>
 #include <raylib.h>
 #include <ladlib/array.h>
-#include "include/particle/particle.h"
 
+#include "include/particle/particle.h"
 #define UNIFORMGRID_LOGGER
 #include "include/uniform_grid/uniform_grid.h"
 
-#define SCREEN_WIDTH 1800
-#define SCREEN_HEIGHT 1000
-#define RADIUS 12
-#define CELL_SIZE (RADIUS * 3)
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
 
 #define FPS 60
-#define DT (1.f / FPS)
 #define SUB_STEPS 12
-#define SDT (DT / SUB_STEPS)
-#define FRICTION 0.1
-#define RESTITUTION 0.75
+
+#define DT (1.f / FPS)
+#define SUB_DT (DT / SUB_STEPS)
+
+#define RADIUS 10
+#define CELL_SIZE (RADIUS * 10)
+
+#define FRICTION 0.1f
+#define RESTITUTION 0.8f
 
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "qhash2d");
     SetTargetFPS(FPS);
 
     Particle *particles = array_new(sizeof(Particle));
-    if (!particles) { CloseWindow(); return 1; }
+    if (!particles) {
+        fprintf(stderr, "[ERROR]: Couldn't init particle array !\n");
+        CloseWindow(); return 1;
+    }
 
     UniformGrid *grid = uniformgrid_init(SCREEN_WIDTH, SCREEN_HEIGHT, CELL_SIZE);
-    if (!grid) { CloseWindow(); array_destroy((void **) &particles); return 1; }
+    if (!grid) {
+        fprintf(stderr, "[ERROR]: Couldn't init grid !\n");
+        CloseWindow(); array_destroy((void **) &particles); return 1;
+    }
+
+    particle_spawn_random(&particles, 50, (Vector2) {0}, RADIUS, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_SPACE)) {
-            particle_spawn_random(&particles, 300, RADIUS, (Vector2) {0, 980.f}, SCREEN_WIDTH, SCREEN_HEIGHT);
-        }
+        if (IsKeyPressed(KEY_C)) { array_clear(particles); }
+        if (IsKeyPressed(KEY_SPACE)) { particle_spawn_random(&particles, 50, (Vector2) {0}, RADIUS, SCREEN_WIDTH, SCREEN_HEIGHT); }
 
-        if (IsKeyPressed(KEY_J)) {
-            Vector2 mouse_pos = GetMousePosition();
-            particle_spawn_burst(&particles, mouse_pos, 50, RADIUS, (Vector2){0, 980.f});
-        }
+        for (size_t i = 0; i < SUB_STEPS; i++) {
 
-        for (int i = 0; i < SUB_STEPS; i++) {
-
-            particle_update(particles, SDT);
-            // particle_constrain(particles, RESTITUTION, FRICTION, SCREEN_WIDTH, SCREEN_HEIGHT);
+            particle_update(particles, SUB_DT);
 
             uniformgrid_clear(grid);
             uniformgrid_populate(grid, particles);
             uniformgrid_resolve_collisions(grid, particles);
+
             particle_constrain(particles, RESTITUTION, FRICTION, SCREEN_WIDTH, SCREEN_HEIGHT);
 
         }
-
-        // uniformgrid_logger(grid);
+        
 
         BeginDrawing();
             ClearBackground(BLACK);
-            DrawFPS(5, 5);
-            DrawText(TextFormat("Particle: %d", array_count(particles)),  5, 25, 20, LIME);
+            DrawFPS(SCREEN_WIDTH - 80, 5);
+            DrawText(TextFormat("Particles: %zu", array_count(particles)), 5, 5, 20, LIME);
 
             particle_draw(particles);
+            // uniformgrid_glogger(grid); // if you want this function enabled, then add #define UNIFORMGRID_LOGGER befor the uniform_grid.h header include.
         EndDrawing();
     }
+}
 
-    CloseWindow();
-    uniformgrid_destroy(grid);
-    array_destroy((void **) &particles);
-    return 0;
-} // gcc -o bin/main main.c src/particle/particle.c src/uniform_grid/uniform_grid.c -Iinclude -lraylib -lm -lladlib && ./bin/main
+// run: gcc -o bin/main main.c src/particle/particle.c src/uniform_grid/uniform_grid.c -Iinclude -lraylib -lm -lladlib && ./bin/main
