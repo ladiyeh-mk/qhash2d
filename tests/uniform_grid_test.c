@@ -48,7 +48,7 @@ int main(void) {
 
             uniformgrid_clear(grid);
             uniformgrid_populate(grid, particles);
-            uniformgrid_resolve_collisions(grid, particles, RESTITUTION, 0);
+            uniformgrid_resolve_collisions(grid, particles);
 
             particle_constrain(particles, RESTITUTION, FRICTION, SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -61,7 +61,7 @@ int main(void) {
             DrawText(TextFormat("Particles: %zu", array_count(particles)), 5, 5, 20, LIME);
 
             particle_draw(particles);
-            uniformgrid_glogger(grid);
+            // uniformgrid_glogger(grid); // if you want this function enabled, then add #define UNIFORMGRID_LOGGER befor the uniform_grid.h header include.
         EndDrawing();
     }
 }
