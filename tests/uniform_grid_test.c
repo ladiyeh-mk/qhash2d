@@ -20,35 +20,6 @@
 #define FRICTION 0.1f
 #define RESTITUTION 0.8f
 
-void uniformgrid_glogger(UniformGrid *grid) {
-    if (!grid || grid->m_cell_size <= 0) { return; }
-
-    for (int x = 0; x < grid->m_cols; x++) {
-        for (int y = 0; y < grid->m_rows; y++) {
-
-            size_t grid_index      = x + grid->m_cols * y;
-            int *grid_cell         = grid->m_ids[grid_index];
-            size_t grid_cell_count = array_count(grid_cell);
-
-            const char *label = TextFormat("%zu", grid_cell_count);
-
-            int font_size = grid->m_cell_size / 3;
-            if (font_size < 10) { font_size = 10; }
-            if (font_size > 24) { font_size = 24; }
-
-            // Shrink if still wider than the cell (with a little padding)
-            while (font_size > 8 && MeasureText(label, font_size) > grid->m_cell_size - 8) {
-                font_size--;
-            }
-
-            DrawText(label, x * grid->m_cell_size + 4, y * grid->m_cell_size + 4, font_size, YELLOW);
-
-            DrawRectangleLines(x * grid->m_cell_size, y * grid->m_cell_size, grid->m_cell_size, grid->m_cell_size, YELLOW);
-
-        }
-    }
-}
-
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "qhash2d");
     SetTargetFPS(FPS);
