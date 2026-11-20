@@ -1,7 +1,8 @@
 #include "../../include/uniform_grid/uniform_grid.h"
-#include <math.h>
-#include <stdlib.h>
 #include <ladlib/array.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 UniformGrid *uniformgrid_init(int screen_width, int screen_height, int cell_size) {
     if (!screen_width || !screen_height || !cell_size) { return NULL; }
@@ -9,108 +10,124 @@ UniformGrid *uniformgrid_init(int screen_width, int screen_height, int cell_size
     UniformGrid *grid = malloc(sizeof(UniformGrid));
     if (!grid) { return NULL; }
 
-    grid->width     = screen_width;
-    grid->height    = screen_height;
-    grid->cell_size = cell_size;
-    
-    grid->cols       = (screen_width  + cell_size - 1) / cell_size;
-    grid->rows       = (screen_height + cell_size - 1) / cell_size;
-    grid->total_size = grid->cols * grid->rows;
+    grid->m_width      = screen_width;
+    grid->m_height     = screen_height;
+    grid->m_cols       = (int) ((screen_width + cell_size - 1) / cell_size);
+    grid->m_rows       = (int) ((screen_height + cell_size - 1) / cell_size);
 
-    grid->ids = array_new(sizeof(int *));
-    if (!grid->ids) { free(grid); return NULL; }
+    grid->m_cell_size  = cell_size;
+    grid->m_total_size = grid->m_cols * grid->m_rows;
 
-    for (int i = 0; i < grid->total_size; i++) {
+    grid->m_ids        = array_new(sizeof(int *));
+    if (!grid->m_ids) { free(grid); return NULL; }
+
+    for (int i = 0; i < grid->m_total_size; i++) {
+
         int *temp = array_new(sizeof(int));
-        if (!temp) { 
-            
-            for (int j = 0; j < i; j++) { 
-                array_destroy((void **) &grid->ids[j]); 
-            } 
-            array_destroy((void **) &grid->ids); 
-            free(grid); 
-            return NULL; 
+        if (!temp) {
+
+            for (int k = 0; k < i; k++) {
+                array_destroy((void **) &grid->m_ids[k]);
+            }
+            array_destroy((void **) &grid->m_ids);
+            free(grid);
+
+            return NULL;
         }
-        
-        // Append the new cell array to the outer container
-        array_append((void **) &grid->ids, (void *) &temp, sizeof(int *));
+
+        if (!array_append((void **) &grid->m_ids, (void *) &temp, sizeof(int *))) {
+
+            for (int k = 0; k < i; k++) {
+                array_destroy((void **) &grid->m_ids[k]);
+            }
+            array_destroy((void **) &grid->m_ids);
+            array_destroy((void **) &temp);
+            free(grid);
+
+            return NULL;
+        }
     }
 
     return grid;
 }
 
 void uniformgrid_populate(UniformGrid *grid, Particle *particles) {
-    if (!grid || !grid->ids || !particles) { return; }
+    if (!grid || !particles) { return; }
 
-    int count = (int) array_count(particles);
-    for (int i = 0; i < count; i++) {
-        int gx = (int) (particles[i].m_current_pos.x / grid->cell_size);
-        int gy = (int) (particles[i].m_current_pos.y / grid->cell_size);
+    int particles_count = array_count(particles);
+    for (int i = 0; i < particles_count; i++) {
+
+        int gx = (int) floorf(particles[i].m_current_pos.x / grid->m_cell_size); // gx & gy short for grid_x & grid_y
+        int gy = (int) floorf(particles[i].m_current_pos.y / grid->m_cell_size); // but it's not like you didn't know it
 
         if (gx < 0) { gx = 0; }
-        if (gy < 0) { gy = 0; }
-        if (gx >= grid->cols) { gx = grid->cols - 1; }
-        if (gy >= grid->rows) { gy = grid->rows - 1; }
+        if (gx >= grid->m_cols) { gx = grid->m_cols - 1; }
 
-        int cell_index = gx + grid->cols * gy;
-        
-        // Safely extract, append, and re-assign the inner cell array pointer ...
-        int *cell_array = grid->ids[cell_index];
-        array_append((void **) &cell_array, (void *) &i, sizeof(int));
-        grid->ids[cell_index] = cell_array;
+        if (gy < 0) { gy = 0; }
+        if (gy >= grid->m_rows) { gy = grid->m_rows - 1; }
+
+        int grid_index = gx + grid->m_cols * gy;
+        int *grid_cell = grid->m_ids[grid_index];
+
+        array_append((void **) &grid_cell, (void *) &i, sizeof(int));
+        grid->m_ids[grid_index] = grid_cell;
+
     }
 }
 
 void uniformgrid_clear(UniformGrid *grid) {
-    if (!grid || !grid->ids) { return; }
+    if (!grid) { return; }
 
-    int total = (int) array_count(grid->ids);
-    for (int i = 0; i < total; i++) {
-        if (grid->ids[i]) { array_clear(grid->ids[i]); }
+    for (int i = 0; i < grid->m_total_size; i++) {
+        array_clear(grid->m_ids[i]);
     }
 }
 
 void uniformgrid_destroy(UniformGrid *grid) {
-    if (!grid) return;
-    if (grid->ids) {
-        int total = (int) array_count(grid->ids);
-        for (int i = 0; i < total; i++) {
-            if (grid->ids[i]) {
-                array_destroy((void **) &grid->ids[i]);
-            }
-        }
-        array_destroy((void **) &grid->ids);
+    if (!grid) { return; }
+
+    for (int i = 0; i < grid->m_total_size; i++) {
+        array_destroy((void **) &grid->m_ids[i]);
     }
+
+    array_destroy((void **) &grid->m_ids);
     free(grid);
 }
 
-void uniformgrid_resolve_collisions(UniformGrid *grid, Particle *particles) {
+void uniformgrid_resolve_collisions(UniformGrid *grid, Particle *particles, float restitution, float percent) {
     if (!grid || !particles) { return; }
 
-    int count = array_count(particles);
-    for (int i = 0; i < count; i++) {
+    size_t particles_count = array_count(particles);
+    for (size_t i = 0; i < particles_count; i++) {
         Particle *particle_a = &particles[i];
 
-        int gx = (int) (particles[i].m_current_pos.x / grid->cell_size);
-        int gy = (int) (particles[i].m_current_pos.y / grid->cell_size);
+        int gx = (int) floorf(particle_a->m_current_pos.x / grid->m_cell_size); // gx & gy short for grid_x & grid_y
+        int gy = (int) floorf(particle_a->m_current_pos.y / grid->m_cell_size); // but it's not like you didn't know it
 
         if (gx < 0) { gx = 0; }
+        if (gx >= grid->m_cols) { gx = grid->m_cols - 1; }
+
         if (gy < 0) { gy = 0; }
-        if (gx >= grid->cols) { gx = grid->cols - 1; }
-        if (gy >= grid->rows) { gy = grid->rows - 1; }
+        if (gy >= grid->m_rows) { gy = grid->m_rows - 1; }
 
-        for (int c = -1; c <= 1; c++) {
-            for (int r = -1; r <= 1; r++) {
-                int cx = gx + c;
-                int cy = gy + r;
-                
-                if (cx < 0 || cx >= grid->cols || cy < 0 || cy >= grid->rows) { continue; }
-                int *cell_array      = grid->ids[cx + grid->cols * cy];
-                int cell_array_count = array_count(cell_array);
+        for (int col = gx - 1; col <= gx + 1; col++) {
+            for (int row = gy - 1; row <= gy + 1; row++) {
 
-                for (int j = 0; j < cell_array_count; j++) {
-                    int id = cell_array[j];
-                    if (i >= id) { continue; }
+                if (col < 0 || col >= grid->m_cols ||
+                    row < 0 || row >= grid->m_rows) {
+
+                    continue;
+                }
+
+                int grid_index = col + grid->m_cols * row;
+                int *grid_cell = grid->m_ids[grid_index];
+
+                int grid_cell_count = array_count(grid_cell);
+                for (int j = 0; j < grid_cell_count; j++) {
+
+                    int id = grid_cell[j];
+                    if (id <= i) { continue; }
+
                     Particle *particle_b = &particles[id];
 
                     float dx = particle_b->m_current_pos.x - particle_a->m_current_pos.x;
@@ -118,25 +135,23 @@ void uniformgrid_resolve_collisions(UniformGrid *grid, Particle *particles) {
 
                     float dist_sq  = dx * dx + dy * dy;
                     float min_dist = particle_b->m_radius + particle_a->m_radius;
-                    if (dist_sq >= min_dist * min_dist) { continue; }
+                    if (dist_sq > min_dist * min_dist) { continue; }
 
                     float dist = sqrtf(dist_sq);
-                    float nx, ny;
-                    
-                    if (dist < 1e-6f) { nx = 1.; ny = 0.; }
-                    else              { nx = dx / dist; ny = dy / dist; }
+                    if (dist < 0.0001f) { continue; }
 
                     float overlap = min_dist - dist;
-                    float correction = overlap * 0.5f;
+                    float nx      = dx / dist;
+                    float ny      = dy / dist;
 
-                    // Push particle A away from B
-                    particle_a->m_current_pos.x -= nx * correction;
-                    particle_a->m_current_pos.y -= ny * correction;
+                    particle_a->m_current_pos.x -= nx * overlap * 0.5f;
+                    particle_a->m_current_pos.y -= ny * overlap * 0.5f;
 
-                    // Push particle B away from A
-                    particle_b->m_current_pos.x += nx * correction;
-                    particle_b->m_current_pos.y += ny * correction;
+                    particle_b->m_current_pos.x += nx * overlap * 0.5f;
+                    particle_b->m_current_pos.y += ny * overlap * 0.5f;
+
                 }
+
             }
         }
     }
